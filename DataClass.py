@@ -4,7 +4,7 @@ from fuzzywuzzy import fuzz
 import datetime
 import matplotlib.pyplot as plt
 import numpy as np
-import statsmodels.api as sm
+#import statsmodels.api as sm
 from Mosaic import MosaicPlot
 import PyQt4
 import itertools
@@ -99,7 +99,7 @@ def getreportoptions(text):
 #outputs for the reports (see constants for options)
 def getoutputs(text):
     outputs = []
-    if text in ["Mapping"]:
+    if text in ["Mapping", "Goal"]:
         outputs = [EXCEL, CSV]
     elif text in ["Returning Users", "Social Media", "Summary", "Reg Fee", "Team Details", "Proxy", "Corporate teams"]:
         outputs = [EXCEL, SUMMARY, CSV]
@@ -147,14 +147,11 @@ def converttodatetime(data, condatetime):
 
 def convertupper(data, convupper):
     for col in convupper:
-        data[col] = data[col].str.decode('iso-8859-1').str.encode('utf-8').str.upper()
-        #try:
-            #data[col] = data[col].str.decode('iso-8859-1').str.encode('utf-8').str.upper()
-        #except AttributeError:
-            #if len(data.loc[data[col].notnull(), col]):
-                #print data.loc[data[col].notnull(), col]
-                #print "\n---- Upper: Something is weird on column: {}".format(col)
-                #exit()
+        #data[col] = data[col].str.decode('iso-8859-1').str.encode('utf-8').str.upper()
+        try:
+            data[col] = data[col].str.decode('iso-8859-1').str.encode('utf-8').str.upper()
+        except AttributeError:
+            pass
     return data
 
 def converttodate(data, convdate):
@@ -430,7 +427,7 @@ class datasets:
                 
                 #get unique for the split teams
                 foo = dons[dons["Solicited Donation"] == "Team Split"]
-                foo = foo.drop_duplicates(cols=['Event ID', "Constituent ID"], take_last=True)
+                foo = foo.drop_duplicates(subset=['Event ID', "Constituent ID"], keep='last')
                 
                 #only keep a unique split team donation and make them look like a team doantion
                 dons = dons[dons["Solicited Donation"] != "Team Split"]
@@ -457,7 +454,7 @@ class datasets:
             self.fundraisers = self.dataFilByEvent.loc[self.dataFilByEvent["Transaction Type"] == "Registration", \
                                                        ["Registration Date", "Transaction Source", "Constituent ID", \
                                                         "Event ID", "Email Address", "First Name", "Last Name", \
-                                                        "Postal Code", "Location Name", "TeamID", "Facebook Connect", \
+                                                        "Postal Code", "Location Name", "Location Type ID", "TeamID", "Facebook Connect", \
                                                         "Mobile App", "Participant Goal", 'Registration Status', \
                                                         'Registration Type', 'Registration Fee Status', 'Coupon Code', \
                                                         'Net Reg Fee Amount', 'Registered By', 'iPhone', 'Android', \
@@ -477,7 +474,7 @@ class datasets:
                 if app and mw:
                     return "APP & MOBILE WEB"
                 elif app:
-                    return "APP"
+                    return "APP Only"
                 elif mw:
                     return "MOBILE WEB"
                 else:
@@ -502,11 +499,11 @@ class datasets:
             self.fundraisers["ver sponsors"] = self.donations[self.donations["Payment Status"] == "Succeeded"].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].count()
             self.fundraisers["pledges"] = self.donations[pd.isnull(self.donations["Payment Status"])].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].sum()
             self.fundraisers["pledges sponsors"] = self.donations[pd.isnull(self.donations["Payment Status"])].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].count()
- 
-            self.fundraisers["ABMT"] = self.donations[pd.isnull(self.donations["Payment Status"]) | (self.donations["PaymentVerification"] == "OfflinePaidIn")].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].sum()
-            self.fundraisers["ABMT sponsors"] = self.donations[pd.isnull(self.donations["Payment Status"]) | (self.donations["PaymentVerification"] == "OfflinePaidIn")].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].count()
-            self.fundraisers["ABMT"] = self.fundraisers["ABMT"].fillna(0)
-            self.fundraisers["ABMT sponsors"] = self.fundraisers["ABMT sponsors"].fillna(0)
+			
+            #self.fundraisers["ABMT"] = self.donations[pd.isnull(self.donations["Payment Status"]) | (self.donations["PaymentVerification"] == "OfflinePaidIn")].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].sum()
+            #self.fundraisers["ABMT sponsors"] = self.donations[pd.isnull(self.donations["Payment Status"]) | (self.donations["PaymentVerification"] == "OfflinePaidIn")].groupby(["Event ID", "Solicitor ID"])["Donation Amount"].count()
+            #self.fundraisers["ABMT"] = self.fundraisers["ABMT"].fillna(0)
+            #self.fundraisers["ABMT sponsors"] = self.fundraisers["ABMT sponsors"].fillna(0)
             
             self.fundraisers["total"] = self.fundraisers["ver raised"] + self.fundraisers["pledges"]
             self.fundraisers["total sponsors"] = self.fundraisers["ver sponsors"] + self.fundraisers["pledges sponsors"]
@@ -691,7 +688,7 @@ class datasets:
         corporate3 = corporate3.reset_index()
         
         corporateDF = pd.concat([corporate1,corporate2,corporate3])
-        corporateDF = corporateDF.sort(['Event ID', "Corporate Team Name"])
+        corporateDF = corporateDF.sort_values(by=['Event ID', "Corporate Team Name"])
                       
         if outputs[SUMMARY]:
             mycol = "ver raised"
@@ -706,8 +703,11 @@ class datasets:
             corp["Corporate Raised"] = corporateDF[(corporateDF["Constituent ID"].isnull()) & (corporateDF["TeamID"].isnull())].groupby(["Event ID", "Corporate Team Name"])[mycol].sum()
             corp["Corporate Raised"] = corp["Corporate Raised"].fillna(0)
             corp["Num People"] = corporateDF.groupby(["Event ID", "Corporate Team Name"])["Constituent ID"].count()
-            corp["Num Teams"] = corporateDF[corporateDF["TeamID"] != -1].groupby(["Event ID", "Corporate Team Name"])["TeamID"].nunique()
-            corp.head()
+            try:
+				corp["Num Teams"] = corporateDF[corporateDF["TeamID"] != -1].groupby(["Event ID", "Corporate Team Name"])["TeamID"].nunique()
+            except:
+				pass
+			#corp.head()
             self.outputs(corp, title, {SUMMARY: True})          
         if outputs[EXCEL] or outputs[CSV]:
 
@@ -960,20 +960,20 @@ class datasets:
             self.outputs(stats, title, {SUMMARY: True})            
         if outputs[EXCEL]:
             self.outputs(self.fundraisers, title, {EXCEL: True})  
-        if outputs[GRAPH]:
-            myY = "ver raised"
-            if (options != "Verified"):  
-                myY='total'
-            plt.figure()
-            for i, group in self.fundraisers.groupby(self.depth()):         
-                mytitle = title + " for " + str(i)
-                model = sm.OLS(group[myY], group["Participant Goal"])
-                fitted = model.fit()
-                self.output.set(fitted.summary(), "OLS regression report for {}".format(str(i)))
-                group.plot(kind='scatter', x="Participant Goal", y=myY, title=mytitle)
-                plt.plot(group["Participant Goal"], fitted.fittedvalues, 'b')
+        #if outputs[GRAPH]:
+        #    myY = "ver raised"
+        #    if (options != "Verified"):  
+        #        myY='total'
+        #    plt.figure()
+        #    for i, group in self.fundraisers.groupby(self.depth()):         
+        #        mytitle = title + " for " + str(i)
+        #        model = sm.OLS(group[myY], group["Participant Goal"])
+        #        fitted = model.fit()
+        #        self.output.set(fitted.summary(), "OLS regression report for {}".format(str(i)))
+        #        group.plot(kind='scatter', x="Participant Goal", y=myY, title=mytitle)
+        #        plt.plot(group["Participant Goal"], fitted.fittedvalues, 'b')
                 
-                plt.show(block=False) 
+        #        plt.show(block=False) 
         if outputs[CSV]:
             self.outputs(self.fundraisers, title, {CSV: True})
             
@@ -1081,7 +1081,7 @@ class datasets:
         teams = teams.set_index(['Event ID', 'TeamID'])  
         teammembers = self.fundraisers.groupby(["Event ID", "TeamID"])["ver raised", "pledges", "ver sponsors", "pledges sponsors"].sum()
         teams = pd.merge(teams, teammembers, how='left', left_index=True, right_index=True)
-        captains = self.fundraisers[["Event ID", "Constituent ID", "Email Address", "First Name", "Last Name", "Location Name"]]
+        captains = self.fundraisers[["Event ID", "Constituent ID", "Email Address", "First Name", "Last Name", "Location Name", "Location Type ID"]]
         teams = teams.reset_index()
         
         #cleanup
@@ -1090,6 +1090,8 @@ class datasets:
         teams = teams.set_index(['Event ID', 'TeamID'])
         teams = teams.drop("Constituent ID",1)
         teams = teams.reindex(columns=["Team Name", 
+										"Location Name", 
+										"Location Type ID",
                                        "Team Size", 
                                        "Team Captain ID", 
                                        "Email Address", 
@@ -1169,7 +1171,7 @@ class datasets:
                 col = "pledges"       
             else:
                 col = "total"
-            self.fundraisers.boxplot(column=col, by=["Event ID"])     
+            self.fundraisers[self.fundraisers["ver raised"] > 0].boxplot(column=col, by=["Event ID"])     
             plt.title(title)
             plt.show(block=False) 
         if outputs[CSV]:
@@ -1227,7 +1229,7 @@ class datasets:
             returners = self.fundraisers[["First Name", "Last Name", "Email Address", "Event ID", "ver raised", "Constituent ID"]]
             returners = returners.groupby(["First Name", "Last Name", "Email Address", "Event ID"])["ver raised"].sum().reset_index()
             returners = pd.concat(g for _, g in returners.groupby(["First Name", "Last Name", "Email Address"]) if len(g) > 1)
-            returnersexcel = pd.pivot_table(returners, rows=["First Name", "Last Name", "Email Address"], cols="Event ID", values="ver raised")
+            returnersexcel = pd.pivot_table(returners, index=["First Name", "Last Name", "Email Address"], columns="Event ID", values="ver raised")
             mergeon = ["First Name", "Last Name", "Email Address"]
         #not working :(
         returnersexcel = returnersexcel.reset_index()
@@ -1419,7 +1421,6 @@ class datasets:
             donstats = donstats.reset_index()
         else:
             mydons = self.donationoptions(options)
-            #mydons.to_csv("C:/Users/itaraday/Desktop/ABMT2015_4Ira-2015-09-03/dons.csv")
             donstats = mydons.groupby(self.depth() + ["Typology"])["Donation Amount"].agg(['mean', 'median', 'count', 'sum'])         
             donstats["mode"] = mydons.groupby(self.depth() + ["Typology"])["Donation Amount"].agg(lambda x:x.value_counts().index[0])  
             donstats = donstats.reset_index()

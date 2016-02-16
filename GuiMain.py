@@ -10,6 +10,7 @@ import GuiFunctions as gFunc
 import GuiOutput as gOut
 from tempfile import mkstemp
 import pandas as pd
+#import statsmodels.api
 
 
 #destorying the gui elegantly    
